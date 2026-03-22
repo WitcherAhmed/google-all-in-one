@@ -1,47 +1,49 @@
 import os
 import json
-import google.generativeai as genai
+from google import genai  # Changed from google.generativeai
+from google.genai import types
 
-
+# Setup pathing correctly
 working_dir = os.path.dirname(os.path.abspath(__file__))
+config_file_path = os.path.join(working_dir, "config.json")
 
-
-config_file_path = f"{working_dir}/config.json"
-config_data = json.load(open("config.json"))
-
-
+with open(config_file_path, "r") as f:
+    config_data = json.load(f)
 
 GOOGLE_API_KEY = config_data['GOOGLE_API_KEY']
 
-genai.configure(api_key=GOOGLE_API_KEY)
+# Initialize the new Client
+client = genai.Client(api_key=GOOGLE_API_KEY)
 
-def load_gemini_pro_model():
-    gemini_pro_model = genai.GenerativeModel("models/gemini-2.5-flash")
-    return gemini_pro_model
-
-
-for m in genai.list_models():
-    if 'generateContent' in m.supported_generation_methods:
-        print(m.name)
-
-def gemini_pro_vision_response(prompt, image):
-    gemini_pro_vision_model = genai.GenerativeModel("models/gemini-3-flash-preview")
-    response = gemini_pro_vision_model.generate_content([prompt, image])
-    result = response.text
-    return result
-
-def embeddings_model_response(input_text):
-    embedding_model = "models/gemini-embedding-2-preview"
-    embedding = genai.embed_content(model=embedding_model,
-                                    content=input_text,
-                                    task_type="retrieval_document")
-    embedding_list = embedding["embedding"]
-    return embedding_list
-
-
-# get response from Gemini-Pro model - text to text
+# 1. Text-to-Text Response
 def gemini_pro_response(user_prompt):
-    gemini_pro_model = genai.GenerativeModel("models/gemini-2.5-flash")
-    response = gemini_pro_model.generate_content(user_prompt)
-    result = response.text
-    return result
+    # 'models/' prefix is no longer strictly required in the name string
+    response = client.models.generate_content(
+        model="gemini-2.5-flash", 
+        contents=user_prompt
+    )
+    return response.text
+
+# 2. Vision/Multimodal Response
+def gemini_pro_vision_response(prompt, image):
+    # In the new SDK, you just pass the image in the list
+    response = client.models.generate_content(
+        model="gemini-3-flash-preview",
+        contents=[prompt, image]
+    )
+    return response.text
+
+# 3. Embeddings Response
+def embeddings_model_response(input_text):
+    # Use the new embed_content method on the client
+    response = client.models.embed_content(
+        model="gemini-embedding-2-preview",
+        contents=input_text,
+        config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT")
+    )
+    # The new SDK returns a list of embeddings; we take the first one
+    return response.embeddings[0].values
+
+# Simple debug loop to see available models
+for m in client.models.list():
+    print(f"Model: {m.name}")
